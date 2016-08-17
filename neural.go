@@ -4,6 +4,7 @@ import (
 	"errors"
 	"image"
 	"log"
+	"math"
 	"math/rand"
 	"sync"
 
@@ -15,7 +16,8 @@ import (
 )
 
 const (
-	neuralSamerDefaultInSize = 300
+	neuralSamerDefaultInSize     = 300
+	neuralSamerMomentSampleCount = 20
 )
 
 func init() {
@@ -96,6 +98,7 @@ func NewNeuralSamer() *NeuralSamer {
 		OutputCount: 1,
 	}
 	network := neuralnet.Network{
+		&neuralnet.RescaleLayer{Scale: 1},
 		convLayer1,
 		&neuralnet.HyperbolicTangent{},
 		poolingLayer1,
@@ -129,6 +132,10 @@ func (n *NeuralSamer) Same(img1, img2 image.Image) bool {
 // It uses sgd.SGDInteractive, so it stops when the user
 // sends a kill signal.
 func (n *NeuralSamer) Train(samples Samples, manip Manipulator) {
+	mean, variance := n.pixelMoments(samples)
+	n.network[0].(*neuralnet.RescaleLayer).Bias = -mean
+	n.network[0].(*neuralnet.RescaleLayer).Scale = 1 / math.Sqrt(variance)
+
 	batchGrad := &neuralnet.BatchRGradienter{
 		Learner:  n.network.BatchLearner(),
 		CostFunc: &neuralnet.SigmoidCECost{},
@@ -219,6 +226,33 @@ func (n *NeuralSamer) totalCost(set sgd.SliceSampleSet, maxGos int) float64 {
 
 	wg.Wait()
 	return total
+}
+
+func (n *NeuralSamer) pixelMoments(source Samples) (mean, variance float64) {
+	var count int
+	for i := 0; i < neuralSamerMomentSampleCount; i++ {
+		img, err := source.Random()
+		if err != nil {
+			count++
+			break
+		}
+		for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
+			for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+				r, g, b, _ := img.At(x, y).RGBA()
+				count += 3
+				mean += float64(r) / 0xffff
+				mean += float64(g) / 0xffff
+				mean += float64(b) / 0xffff
+				variance += math.Pow(float64(r)/0xffff, 2)
+				variance += math.Pow(float64(g)/0xffff, 2)
+				variance += math.Pow(float64(b)/0xffff, 2)
+			}
+		}
+	}
+	mean /= float64(count)
+	variance /= float64(count)
+	variance -= mean * mean
+	return
 }
 
 func (n *NeuralSamer) pairToTensor(img1, img2 image.Image) *neuralnet.Tensor3 {

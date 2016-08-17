@@ -1,3 +1,4 @@
+// Command train_neural trains a neural Samer.
 package main
 
 import (

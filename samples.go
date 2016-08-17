@@ -7,6 +7,9 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+
+	_ "image/gif"
+	_ "image/png"
 )
 
 // Samples represents any source of image samples.

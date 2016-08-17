@@ -5,7 +5,7 @@ import (
 	"image"
 	"log"
 	"math/rand"
-	"runtime"
+	"sync"
 
 	"github.com/nfnt/resize"
 	"github.com/unixpickle/autofunc"
@@ -113,17 +113,18 @@ func (n *NeuralSamer) Train(samples Samples, manip Manipulator) {
 		Learner:  n.network.BatchLearner(),
 		CostFunc: &neuralnet.SigmoidCECost{},
 
-		MaxGoroutines: runtime.GOMAXPROCS(0),
-		MaxBatchSize:  runtime.GOMAXPROCS(0) * 10,
+		MaxGoroutines: 3,
+		MaxBatchSize:  5,
 	}
+	batchSize := batchGrad.MaxBatchSize * batchGrad.MaxGoroutines
 	gradienter := &sgd.Adam{
 		Gradienter: batchGrad,
 	}
-	sampleSet := make(sgd.SliceSampleSet, batchGrad.MaxBatchSize)
-	sgd.SGDInteractive(gradienter, sampleSet, 0.001, batchGrad.MaxBatchSize, func() bool {
+	sampleSet := make(sgd.SliceSampleSet, batchSize)
+	sgd.SGDInteractive(gradienter, sampleSet, 0.001, batchSize, func() bool {
 		n.createSampleSet(sampleSet, samples, manip)
-		log.Println("minibatch cost", neuralnet.TotalCost(batchGrad.CostFunc,
-			n.network, sampleSet))
+		cost := n.totalCost(sampleSet, batchGrad.MaxGoroutines)
+		log.Println("minibatch cost", cost)
 		return true
 	})
 }
@@ -168,6 +169,34 @@ func (n *NeuralSamer) createSampleSet(set sgd.SliceSampleSet, s Samples, m Manip
 		}
 	}
 	return nil
+}
+
+func (n *NeuralSamer) totalCost(set sgd.SliceSampleSet, maxGos int) float64 {
+	var total float64
+	var totalLock sync.Mutex
+
+	sampleChan := make(chan sgd.SampleSet, set.Len())
+	for i := 0; i < set.Len(); i++ {
+		sampleChan <- set.Subset(i, i+1)
+	}
+	close(sampleChan)
+
+	var wg sync.WaitGroup
+	for i := 0; i < maxGos; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for set := range sampleChan {
+				cost := neuralnet.TotalCost(&neuralnet.SigmoidCECost{}, n.network, set)
+				totalLock.Lock()
+				total += cost
+				totalLock.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+	return total
 }
 
 func (n *NeuralSamer) pairToTensor(img1, img2 image.Image) *neuralnet.Tensor3 {

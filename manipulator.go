@@ -10,6 +10,23 @@ import (
 	"github.com/nfnt/resize"
 )
 
+// DefaultManipulator is a manipulator which can be used
+// to produce reasonable manipulations.
+var DefaultManipulator Manipulator = &AggregateManipulator{
+	Manipulators: []Manipulator{
+		&Scale{
+			MinScale: 0.5,
+			MaxScale: 1.5,
+		},
+		&Crop{
+			MinMajorKeep: 0.5,
+			MinMinorKeep: 0.8,
+		},
+		&CompressJPEG{},
+	},
+	Probabilities: []float64{0.5, 0.5, 0.5},
+}
+
 // A Manipulator applies a realistic manipulation to
 // an image, such as cropping, scaling, or compressing.
 // A manipulation may be probabilistic, meaning it may

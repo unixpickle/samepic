@@ -223,7 +223,7 @@ func (n *NeuralSamer) imageToTensor(img image.Image) *neuralnet.Tensor3 {
 	res := neuralnet.NewTensor3(n.inSize, n.inSize, 3)
 	for y := 0; y < img.Bounds().Dy(); y++ {
 		for x := 0; x < img.Bounds().Dx(); x++ {
-			r, g, b, _ := img.At(x, y).RGBA()
+			r, g, b, _ := img.At(x+img.Bounds().Min.X, y+img.Bounds().Min.Y).RGBA()
 			res.Set(x, y, 0, float64(r)/0xffff)
 			res.Set(x, y, 1, float64(g)/0xffff)
 			res.Set(x, y, 2, float64(b)/0xffff)

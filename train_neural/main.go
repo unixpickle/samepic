@@ -47,4 +47,15 @@ func main() {
 
 	log.Println("Training...")
 	network.Train(sampleDir, samepic.DefaultManipulator)
+
+	outData, err := serializer.SerializeWithType(network)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Failed to serialize:", err)
+		os.Exit(1)
+	}
+
+	if err := ioutil.WriteFile(os.Args[2], outData, 0755); err != nil {
+		fmt.Fprintln(os.Stderr, "Failed to write output:", err)
+		os.Exit(1)
+	}
 }

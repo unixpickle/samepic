@@ -53,14 +53,14 @@ func DeserializeNeuralSamer(d []byte) (*NeuralSamer, error) {
 // NewNeuralSamer makes a randomly initialized NeuralSamer.
 func NewNeuralSamer() *NeuralSamer {
 	convLayer1 := &neuralnet.ConvLayer{
-		FilterCount:  20,
+		FilterCount:  30,
 		FilterWidth:  3,
 		FilterHeight: 3,
 		Stride:       1,
 
 		InputWidth:  neuralSamerDefaultInSize,
-		InputHeight: neuralSamerDefaultInSize,
-		InputDepth:  6,
+		InputHeight: neuralSamerDefaultInSize * 2,
+		InputDepth:  3,
 	}
 	poolingLayer1 := &neuralnet.MaxPoolingLayer{
 		XSpan:       3,
@@ -69,9 +69,26 @@ func NewNeuralSamer() *NeuralSamer {
 		InputHeight: convLayer1.OutputHeight(),
 		InputDepth:  convLayer1.FilterCount,
 	}
+	convLayer2 := &neuralnet.ConvLayer{
+		FilterCount:  30,
+		FilterWidth:  5,
+		FilterHeight: 5,
+		Stride:       2,
+
+		InputWidth:  poolingLayer1.OutputWidth(),
+		InputHeight: poolingLayer1.OutputHeight(),
+		InputDepth:  convLayer1.FilterCount,
+	}
+	poolingLayer2 := &neuralnet.MaxPoolingLayer{
+		XSpan:       5,
+		YSpan:       5,
+		InputWidth:  convLayer2.OutputWidth(),
+		InputHeight: convLayer2.OutputHeight(),
+		InputDepth:  convLayer2.FilterCount,
+	}
 	denseLayer1 := &neuralnet.DenseLayer{
-		InputCount: poolingLayer1.OutputWidth() * poolingLayer1.OutputHeight() *
-			convLayer1.FilterCount,
+		InputCount: poolingLayer2.OutputWidth() * poolingLayer2.OutputHeight() *
+			convLayer2.FilterCount,
 		OutputCount: 100,
 	}
 	denseLayer2 := &neuralnet.DenseLayer{
@@ -82,6 +99,9 @@ func NewNeuralSamer() *NeuralSamer {
 		convLayer1,
 		&neuralnet.HyperbolicTangent{},
 		poolingLayer1,
+		convLayer2,
+		&neuralnet.HyperbolicTangent{},
+		poolingLayer2,
 		denseLayer1,
 		&neuralnet.HyperbolicTangent{},
 		denseLayer2,
@@ -121,10 +141,12 @@ func (n *NeuralSamer) Train(samples Samples, manip Manipulator) {
 		Gradienter: batchGrad,
 	}
 	sampleSet := make(sgd.SliceSampleSet, batchSize)
+	var epoch int
 	sgd.SGDInteractive(gradienter, sampleSet, 0.001, batchSize, func() bool {
 		n.createSampleSet(sampleSet, samples, manip)
 		cost := n.totalCost(sampleSet, batchGrad.MaxGoroutines)
-		log.Println("minibatch cost", cost)
+		log.Printf("minibatch %d cost=%f", epoch, cost)
+		epoch++
 		return true
 	})
 }
@@ -202,12 +224,12 @@ func (n *NeuralSamer) totalCost(set sgd.SliceSampleSet, maxGos int) float64 {
 func (n *NeuralSamer) pairToTensor(img1, img2 image.Image) *neuralnet.Tensor3 {
 	t1 := n.imageToTensor(img1)
 	t2 := n.imageToTensor(img2)
-	res := neuralnet.NewTensor3(n.inSize, n.inSize, 6)
+	res := neuralnet.NewTensor3(n.inSize, n.inSize*2, 3)
 	for y := 0; y < t1.Height; y++ {
 		for x := 0; x < t1.Width; x++ {
 			for z := 0; z < 3; z++ {
 				res.Set(x, y, z, t1.Get(x, y, z))
-				res.Set(x, y, z+3, t2.Get(x, y, z))
+				res.Set(x, y+n.inSize, z, t2.Get(x, y, z))
 			}
 		}
 	}

@@ -91,10 +91,14 @@ func NewNeuralSamer() *NeuralSamer {
 	denseLayer1 := &neuralnet.DenseLayer{
 		InputCount: poolingLayer2.OutputWidth() * poolingLayer2.OutputHeight() *
 			convLayer2.FilterCount,
-		OutputCount: 100,
+		OutputCount: 200,
 	}
 	denseLayer2 := &neuralnet.DenseLayer{
 		InputCount:  denseLayer1.OutputCount,
+		OutputCount: 100,
+	}
+	denseLayer3 := &neuralnet.DenseLayer{
+		InputCount:  denseLayer2.OutputCount,
 		OutputCount: 1,
 	}
 	network := neuralnet.Network{
@@ -108,6 +112,8 @@ func NewNeuralSamer() *NeuralSamer {
 		denseLayer1,
 		&neuralnet.HyperbolicTangent{},
 		denseLayer2,
+		&neuralnet.HyperbolicTangent{},
+		denseLayer3,
 	}
 	network.Randomize()
 	return &NeuralSamer{
@@ -149,7 +155,7 @@ func (n *NeuralSamer) Train(samples Samples, manip Manipulator) {
 	}
 	sampleSet := make(sgd.SliceSampleSet, batchSize)
 	var epoch int
-	sgd.SGDInteractive(gradienter, sampleSet, 0.001, batchSize, func() bool {
+	sgd.SGDInteractive(gradienter, sampleSet, 0.0001, batchSize, func() bool {
 		n.createSampleSet(sampleSet, samples, manip)
 		cost := n.totalCost(sampleSet, batchGrad.MaxGoroutines)
 		log.Printf("minibatch %d cost=%f", epoch, cost)

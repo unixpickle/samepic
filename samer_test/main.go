@@ -15,6 +15,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Usage:", os.Args[0], "samer samples [count]")
 		fmt.Fprintln(os.Stderr, "Available samers:")
 		fmt.Fprintln(os.Stderr, " - avghash")
+		fmt.Fprintln(os.Stderr, " - colorprof")
 		os.Exit(1)
 	}
 
@@ -32,6 +33,8 @@ func main() {
 	switch os.Args[1] {
 	case "avghash":
 		samer = &samepic.AverageHash{}
+	case "colorprof":
+		samer = &samepic.ColorProf{}
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown samer:", os.Args[1])
 		os.Exit(1)

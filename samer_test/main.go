@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/unixpickle/samepic"
+	"github.com/unixpickle/serializer"
 )
 
 const DefaultSampleCount = 100
@@ -17,6 +20,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, " - avghash")
 		fmt.Fprintln(os.Stderr, " - colorprof")
 		fmt.Fprintln(os.Stderr, " - squashcomp")
+		fmt.Fprintln(os.Stderr, " - neuralnet[PATH] ([PATH] is a filepath)")
 		os.Exit(1)
 	}
 
@@ -39,8 +43,28 @@ func main() {
 	case "squashcomp":
 		samer = &samepic.SquashComp{}
 	default:
-		fmt.Fprintln(os.Stderr, "Unknown samer:", os.Args[1])
-		os.Exit(1)
+		if strings.HasPrefix(os.Args[1], "neuralnet") {
+			path := os.Args[1][len("neuralnet"):]
+			netData, err := ioutil.ReadFile(path)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Failed to read network:", err)
+				os.Exit(1)
+			}
+			net, err := serializer.DeserializeWithType(netData)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Failed to deserialize network:", err)
+				os.Exit(1)
+			}
+			var ok bool
+			samer, ok = net.(*samepic.NeuralSamer)
+			if !ok {
+				fmt.Fprintf(os.Stderr, "Unexpected data type: %T\n", net)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, "Unknown samer:", os.Args[1])
+			os.Exit(1)
+		}
 	}
 	samples, err := samepic.NewDirSamples(os.Args[2])
 	if err != nil {

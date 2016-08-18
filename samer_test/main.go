@@ -16,6 +16,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Available samers:")
 		fmt.Fprintln(os.Stderr, " - avghash")
 		fmt.Fprintln(os.Stderr, " - colorprof")
+		fmt.Fprintln(os.Stderr, " - squashcomp")
 		os.Exit(1)
 	}
 
@@ -35,6 +36,8 @@ func main() {
 		samer = &samepic.AverageHash{}
 	case "colorprof":
 		samer = &samepic.ColorProf{}
+	case "squashcomp":
+		samer = &samepic.SquashComp{}
 	default:
 		fmt.Fprintln(os.Stderr, "Unknown samer:", os.Args[1])
 		os.Exit(1)

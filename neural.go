@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	neuralSamerDefaultInSize     = 300
+	neuralSamerDefaultInSize     = 200
 	neuralSamerMomentSampleCount = 20
 )
 
@@ -55,13 +55,13 @@ func DeserializeNeuralSamer(d []byte) (*NeuralSamer, error) {
 // NewNeuralSamer makes a randomly initialized NeuralSamer.
 func NewNeuralSamer() *NeuralSamer {
 	convLayer1 := &neuralnet.ConvLayer{
-		FilterCount:  30,
+		FilterCount:  50,
 		FilterWidth:  3,
 		FilterHeight: 3,
 		Stride:       1,
 
 		InputWidth:  neuralSamerDefaultInSize,
-		InputHeight: neuralSamerDefaultInSize * 2,
+		InputHeight: neuralSamerDefaultInSize,
 		InputDepth:  3,
 	}
 	poolingLayer1 := &neuralnet.MaxPoolingLayer{
@@ -72,9 +72,9 @@ func NewNeuralSamer() *NeuralSamer {
 		InputDepth:  convLayer1.FilterCount,
 	}
 	convLayer2 := &neuralnet.ConvLayer{
-		FilterCount:  30,
-		FilterWidth:  5,
-		FilterHeight: 5,
+		FilterCount:  50,
+		FilterWidth:  4,
+		FilterHeight: 4,
 		Stride:       2,
 
 		InputWidth:  poolingLayer1.OutputWidth(),
@@ -82,14 +82,26 @@ func NewNeuralSamer() *NeuralSamer {
 		InputDepth:  convLayer1.FilterCount,
 	}
 	poolingLayer2 := &neuralnet.MaxPoolingLayer{
-		XSpan:       5,
-		YSpan:       5,
+		XSpan:       3,
+		YSpan:       3,
 		InputWidth:  convLayer2.OutputWidth(),
 		InputHeight: convLayer2.OutputHeight(),
 		InputDepth:  convLayer2.FilterCount,
 	}
+
+	convPart := &dualConvLayer{
+		Network: neuralnet.Network{
+			convLayer1,
+			&neuralnet.HyperbolicTangent{},
+			poolingLayer1,
+			convLayer2,
+			&neuralnet.HyperbolicTangent{},
+			poolingLayer2,
+		},
+	}
+
 	denseLayer1 := &neuralnet.DenseLayer{
-		InputCount: poolingLayer2.OutputWidth() * poolingLayer2.OutputHeight() *
+		InputCount: 2 * poolingLayer2.OutputWidth() * poolingLayer2.OutputHeight() *
 			convLayer2.FilterCount,
 		OutputCount: 200,
 	}
@@ -103,12 +115,7 @@ func NewNeuralSamer() *NeuralSamer {
 	}
 	network := neuralnet.Network{
 		&neuralnet.RescaleLayer{Scale: 1},
-		convLayer1,
-		&neuralnet.HyperbolicTangent{},
-		poolingLayer1,
-		convLayer2,
-		&neuralnet.HyperbolicTangent{},
-		poolingLayer2,
+		convPart,
 		denseLayer1,
 		&neuralnet.HyperbolicTangent{},
 		denseLayer2,
@@ -292,4 +299,48 @@ func (n *NeuralSamer) imageToTensor(img image.Image) *neuralnet.Tensor3 {
 		}
 	}
 	return res
+}
+
+// dualConvLayer applies a convolutional network to both
+// halves of an input vector.
+type dualConvLayer struct {
+	Network neuralnet.Network
+}
+
+func init() {
+	var d dualConvLayer
+	serializer.RegisterDeserializer(d.SerializerType(),
+		func(d []byte) (serializer.Serializer, error) {
+			net, err := neuralnet.DeserializeNetwork(d)
+			if err != nil {
+				return nil, err
+			}
+			return &dualConvLayer{Network: net}, nil
+		})
+}
+
+func (d *dualConvLayer) Apply(in autofunc.Result) autofunc.Result {
+	size := len(in.Output())
+	part1 := autofunc.Slice(in, 0, size/2)
+	part2 := autofunc.Slice(in, size/2, size)
+	return autofunc.Concat(d.Network.Apply(part1), d.Network.Apply(part2))
+}
+
+func (d *dualConvLayer) ApplyR(rv autofunc.RVector, in autofunc.RResult) autofunc.RResult {
+	size := len(in.Output())
+	part1 := autofunc.SliceR(in, 0, size/2)
+	part2 := autofunc.SliceR(in, size/2, size)
+	return autofunc.ConcatR(d.Network.ApplyR(rv, part1), d.Network.ApplyR(rv, part2))
+}
+
+func (d *dualConvLayer) Randomize() {
+	d.Network.Randomize()
+}
+
+func (d *dualConvLayer) SerializerType() string {
+	return "github.com/unixpickle/samepic.dualConvLayer"
+}
+
+func (d *dualConvLayer) Serialize() ([]byte, error) {
+	return d.Network.Serialize()
 }

@@ -2,13 +2,12 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/unixpickle/essentials"
 	"github.com/unixpickle/samepic"
-	"github.com/unixpickle/serializer"
 )
 
 const DefaultSampleCount = 100
@@ -45,21 +44,10 @@ func main() {
 	default:
 		if strings.HasPrefix(os.Args[1], "neuralnet") {
 			path := os.Args[1][len("neuralnet"):]
-			netData, err := ioutil.ReadFile(path)
+			var err error
+			samer, err = samepic.LoadNeuralSamer(path)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Failed to read network:", err)
-				os.Exit(1)
-			}
-			net, err := serializer.DeserializeWithType(netData)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "Failed to deserialize network:", err)
-				os.Exit(1)
-			}
-			var ok bool
-			samer, ok = net.(*samepic.NeuralSamer)
-			if !ok {
-				fmt.Fprintf(os.Stderr, "Unexpected data type: %T\n", net)
-				os.Exit(1)
+				essentials.Die(err)
 			}
 		} else {
 			fmt.Fprintln(os.Stderr, "Unknown samer:", os.Args[1])

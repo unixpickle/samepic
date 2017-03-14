@@ -10,7 +10,7 @@ Here are a bunch of algorithms and their performance on 100 test samples. It mea
 | --------------- | --------------------- | --------------------- |
 | Average Hashing | 28%                   | 100%                  |
 | Color Profiling | 94%                   | 100%                  |
-| Neural Networks | 98%                   | 82%                   |
+| Neural Networks | 92%                   | 100%                  |
 | SquashComp      | 70%                   | 100%                  |
 
-The algorithms (excluding neural networks) were tuned to prevent false positives (i.e. errors when dealing with negative samples). This may or may not be desired, depending on use case.
+The algorithms were tuned to prevent false positives (i.e. errors when dealing with negative samples). This may or may not be desired, depending on use case.

@@ -69,15 +69,17 @@ func (n *NeuralSamer) SameBatch(images <-chan *IDImage) <-chan *Pair {
 		for image := range images {
 			in := imagenet.ImageToTensor(image.Image)
 			out := n.Net.Apply(anydiff.NewConst(in), 1).Output().Copy()
-			diffs := features.Copy()
-			diffs.Scale(c.MakeNumeric(-1))
-			anyvec.AddRepeated(diffs, out)
-			anyvec.Pow(diffs, c.MakeNumeric(2))
-			sqErrors := anyvec.SumCols(diffs, len(ids)).Data().([]float32)
-			for i, sqError := range sqErrors {
-				mse := float64(sqError) / float64(out.Len())
-				if mse < n.cutoff() {
-					res <- &Pair{ids[i], image.ID}
+			if len(ids) > 0 {
+				diffs := features.Copy()
+				diffs.Scale(c.MakeNumeric(-1))
+				anyvec.AddRepeated(diffs, out)
+				anyvec.Pow(diffs, c.MakeNumeric(2))
+				sqErrors := anyvec.SumCols(diffs, len(ids)).Data().([]float32)
+				for i, sqError := range sqErrors {
+					mse := float64(sqError) / float64(out.Len())
+					if mse < n.cutoff() {
+						res <- &Pair{ids[i], image.ID}
+					}
 				}
 			}
 			ids = append(ids, image.ID)

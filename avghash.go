@@ -35,20 +35,28 @@ type AverageHash struct {
 func (a *AverageHash) Same(img1, img2 image.Image) bool {
 	hash1 := a.Hash(img1)
 	hash2 := a.Hash(img2)
+	return hashMatchRatio(hash1, hash2) >= a.threshold()
+}
 
-	var matchCount int
-	for i, x := range hash1 {
-		if x == hash2[i] {
-			matchCount++
+// SameBatch finds pairs of near duplicates.
+func (a *AverageHash) SameBatch(images <-chan *IDImage) <-chan *Pair {
+	res := make(chan *Pair, 1)
+	go func() {
+		defer close(res)
+		ids := []interface{}{}
+		hashes := [][]bool{}
+		for image := range images {
+			hash := a.Hash(image.Image)
+			for i, hash1 := range hashes {
+				if hashMatchRatio(hash, hash1) >= a.threshold() {
+					res <- &Pair{ids[i], image.ID}
+				}
+			}
+			ids = append(ids, image.ID)
+			hashes = append(hashes, hash)
 		}
-	}
-
-	matchRatio := float64(matchCount) / float64(len(hash1))
-	thresh := a.Threshold
-	if thresh == 0 {
-		thresh = DefaultAverageHashThreshold
-	}
-	return matchRatio >= thresh
+	}()
+	return res
 }
 
 // Hash creates the perceptual hash of an image.
@@ -76,4 +84,22 @@ func (a *AverageHash) Hash(img image.Image) []bool {
 		res[i] = x > mean
 	}
 	return res
+}
+
+func (a *AverageHash) threshold() float64 {
+	if a.Threshold == 0 {
+		return DefaultAverageHashThreshold
+	} else {
+		return a.Threshold
+	}
+}
+
+func hashMatchRatio(h1, h2 []bool) float64 {
+	var matchCount int
+	for i, x := range h1 {
+		if x == h2[i] {
+			matchCount++
+		}
+	}
+	return float64(matchCount) / float64(len(h1))
 }

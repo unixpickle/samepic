@@ -10,6 +10,7 @@ import (
 type Flags struct {
 	Name       string
 	NeuralPath string
+	Threshold  float64
 }
 
 // AddToSet adds the struct fields of f as arguments to
@@ -19,6 +20,8 @@ func (f *Flags) AddToSet(set *flag.FlagSet) {
 		"(avghash, colorprof, squashcomp, or neuralnet)")
 	set.StringVar(&f.NeuralPath, "netpath", "", "path to neural network "+
 		"(for neuralnet samer)")
+	set.Float64Var(&f.Threshold, "threshold", 0, "threshold "+
+		"(applicable for most samers)")
 }
 
 // Samer creates a samer from the parsed flags.
@@ -29,16 +32,21 @@ func (f *Flags) Samer() (Samer, error) {
 
 	switch f.Name {
 	case "avghash":
-		return &AverageHash{}, nil
+		return &AverageHash{Threshold: f.Threshold}, nil
 	case "colorprof":
-		return &ColorProf{}, nil
+		return &ColorProf{Threshold: f.Threshold}, nil
 	case "squashcomp":
-		return &SquashComp{}, nil
+		return &SquashComp{Threshold: f.Threshold}, nil
 	case "neuralnet":
 		if f.NeuralPath == "" {
 			return nil, errors.New("missing -netpath flag")
 		}
-		return LoadNeuralSamer(f.NeuralPath)
+		res, err := LoadNeuralSamer(f.NeuralPath)
+		if err != nil {
+			return nil, err
+		}
+		res.Cutoff = f.Threshold
+		return res, nil
 	default:
 		return nil, errors.New("unknown samer: " + f.Name)
 	}

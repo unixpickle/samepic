@@ -32,18 +32,28 @@ type ColorProf struct {
 // Same decides if two images are the same by comparing
 // their color histograms.
 func (c *ColorProf) Same(img1, img2 image.Image) bool {
-	hist1 := c.Histograms(img1)
-	hist2 := c.Histograms(img2)
+	return c.match(c.Histograms(img1), c.Histograms(img2))
+}
 
-	joinedHist1 := joinVecs(hist1[:])
-	joinedHist2 := joinVecs(hist2[:])
-
-	correlation := joinedHist1.Dot(joinedHist2) / (joinedHist1.Mag() * joinedHist2.Mag())
-	if c.Threshold == 0 {
-		return correlation >= DefaultColorProfThreshold
-	} else {
-		return correlation >= c.Threshold
-	}
+// SameBatch finds pairs of near duplicates.
+func (c *ColorProf) SameBatch(images <-chan *IDImage) <-chan *Pair {
+	res := make(chan *Pair, 1)
+	go func() {
+		defer close(res)
+		ids := []interface{}{}
+		hists := [][3]linalg.Vector{}
+		for image := range images {
+			hist := c.Histograms(image.Image)
+			for i, hist1 := range hists {
+				if c.match(hist, hist1) {
+					res <- &Pair{ids[i], image.ID}
+				}
+			}
+			ids = append(ids, image.ID)
+			hists = append(hists, hist)
+		}
+	}()
+	return res
 }
 
 // Histograms generates the R, G, and B histograms for
@@ -66,6 +76,18 @@ func (c *ColorProf) Histograms(img image.Image) [3]linalg.Vector {
 		}
 	}
 	return res
+}
+
+func (c *ColorProf) match(hist1, hist2 [3]linalg.Vector) bool {
+	joinedHist1 := joinVecs(hist1[:])
+	joinedHist2 := joinVecs(hist2[:])
+
+	correlation := joinedHist1.Dot(joinedHist2) / (joinedHist1.Mag() * joinedHist2.Mag())
+	if c.Threshold == 0 {
+		return correlation >= DefaultColorProfThreshold
+	} else {
+		return correlation >= c.Threshold
+	}
 }
 
 func (c *ColorProf) binIdx(component uint32) int {
